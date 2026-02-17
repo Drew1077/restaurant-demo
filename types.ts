@@ -19,6 +19,7 @@ export type MenuItem = {
     full: number;
     half?: number;
   };
+  foodType?: "Veg" | "Non-Veg";
   spiceLevel?: "Sweet" | "Medium" | "Spicy";
   image: string;
   noPortion?: boolean;

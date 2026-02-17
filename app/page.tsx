@@ -18,6 +18,7 @@ import {
 } from "firebase/firestore";
 import { db, serverTimestamp } from "@/lib/firebase";
 import { OrderItem, MenuItem, ExtraBatch } from "../types";
+import MenuCard from "@/components/MenuCard";
 
 const mapDocToMenuItem = (docSnap: QueryDocumentSnapshot): MenuItem => {
   const rawData = docSnap.data();
@@ -36,6 +37,7 @@ const mapDocToMenuItem = (docSnap: QueryDocumentSnapshot): MenuItem => {
     image: typeof rawData.image === 'object' ? rawData.image.stringValue : (rawData.image && rawData.image !== "/images/default.jpg" ? rawData.image : null),
     noPortion: rawData.noPortion === true || rawData.noPortion === 'true',
     category: typeof rawData.category === 'object' ? rawData.category.stringValue : rawData.category || "starter",
+    foodType: rawData.foodType,
     spiceLevel: rawData.spiceLevel || "Medium",
   };
 
@@ -49,6 +51,7 @@ const mapDocToMenuItem = (docSnap: QueryDocumentSnapshot): MenuItem => {
     image: data.image || `https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&q=80&w=800`,
     noPortion: data.noPortion || false,
     category: (data.category as MenuItem["category"]) || "starter",
+    foodType: data.foodType,
     spiceLevel: data.spiceLevel as any,
   };
 };
@@ -85,10 +88,16 @@ const translations: Record<string, Record<string, string>> = {
     categoryDesserts: "Desserts",
     exploreMenu: "Explore Menu",
     personalDetails: "Personal Details",
-    diners: "Number of Diners",
+    diners: "Number of People",
     fullName: "Your Full Name",
     tableConfirmed: "Table Confirmed",
     tableNotDetected: "Table Not Detected",
+    startOrdering: "Start Ordering",
+    pleaseEnterDetails: "Please enter your details above to start ordering.",
+    instructionStep1: "👇 Step 1: Enter Details",
+    instructionStep2: "Step 2: Add Items",
+    instructionStep3: "Step 3: Tap Cart to Order",
+    requestBill: "Request Bill",
   },
   mr: {
     add: "जोडा",
@@ -109,10 +118,16 @@ const translations: Record<string, Record<string, string>> = {
     categoryDesserts: "आईस्क्रीम/गोड पदार्थ",
     exploreMenu: "मेन्यू पहा",
     personalDetails: "वैयक्तिक तपशील",
-    diners: "जेवणाऱ्यांची संख्या",
+    diners: "लोकांची संख्या",
     fullName: "तुमचे पूर्ण नाव",
     tableConfirmed: "टेबल निश्चित झाले",
     tableNotDetected: "टेबल सापडले नाही",
+    startOrdering: "ऑर्डर सुरू करा",
+    pleaseEnterDetails: "ऑर्डर सुरू करण्यासाठी कृपया वरील तुमचे तपशील भरा.",
+    instructionStep1: "👇 पायरी १: तपशील भरा",
+    instructionStep2: "पायरी २: पदार्थ जोडा",
+    instructionStep3: "पायरी ३: ऑर्डर देण्यासाठी कार्टवर टॅप करा",
+    requestBill: "बिल मागा",
   }
 };
 
@@ -124,154 +139,14 @@ export default function OrderingPage() {
   );
 }
 
-function MenuCard({
-  item,
-  currentLang,
-  t,
-  sessionClosed,
-  addToCart,
-}: {
-  item: MenuItem;
-  currentLang: "en" | "mr";
-  t: (key: string) => string;
-  sessionClosed: boolean;
-  addToCart: (item: MenuItem, portion: "Half" | "Full", price: number, quantity: number) => void;
-}) {
-  const [portion, setPortion] = useState<"Half" | "Full">(item.price.half ? "Half" : "Full");
-  const [quantity, setQuantity] = useState(1);
-
-  const currentPrice = portion === "Half" ? (item.price.half || item.price.full) : item.price.full;
-
-  const getSpiceColor = (level?: string) => {
-    switch (level) {
-      case "Spicy": return "text-rose-600 bg-rose-50 border-rose-100";
-      case "Sweet": return "text-emerald-600 bg-emerald-50 border-emerald-100";
-      default: return "text-orange-600 bg-orange-50 border-orange-100";
-    }
-  };
-
-  const getSpiceIcon = (level?: string) => {
-    switch (level) {
-      case "Spicy": return "🌶️🌶️";
-      case "Sweet": return "🍯";
-      default: return "🌶️";
-    }
-  };
-
-  return (
-    <div className="group bg-white rounded-[2rem] overflow-hidden border border-gray-100 shadow-xl shadow-gray-200/40 hover:shadow-2xl hover:shadow-primary/10 transition-all duration-500 flex flex-col h-full hover:-translate-y-2">
-      <div className="relative h-40 md:h-64 overflow-hidden bg-gray-100">
-        <img
-          src={item.image}
-          alt={item.name}
-          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 ease-out"
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-60 group-hover:opacity-40 transition-opacity" />
-
-        <div className="absolute top-4 left-4 right-4 flex justify-between items-start">
-          <div className="bg-white/95 backdrop-blur-sm p-1.5 rounded-xl shadow-lg border border-white/20">
-            <div className="w-4 h-4 rounded-full bg-white border-2 border-green-600 flex items-center justify-center">
-              <div className="w-1.5 h-1.5 rounded-full bg-green-600" />
-            </div>
-          </div>
-
-          {!item.noPortion && item.price.half && (
-            <div className="flex bg-white/95 backdrop-blur-sm rounded-2xl p-1 shadow-xl border border-white/20">
-              {["Half", "Full"].map((p) => (
-                <button
-                  key={p}
-                  onClick={() => setPortion(p as any)}
-                  className={`px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-tighter transition-all ${portion === p
-                    ? "bg-primary text-white shadow-lg"
-                    : "text-gray-400 hover:text-gray-900"
-                    }`}
-                >
-                  {t(p.toLowerCase())}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="absolute bottom-4 md:bottom-6 left-4 md:left-6 right-4 md:right-6 pointer-events-none">
-          <h3 className="text-lg md:text-xl font-black text-white leading-tight drop-shadow-lg">
-            {currentLang === "mr" && item.mr_name ? item.mr_name : item.name}
-          </h3>
-          {(currentLang === "mr" ? item.mr_description : item.description) && (
-            <p className="text-[10px] md:text-[10px] font-bold text-white/80 uppercase tracking-tighter mt-1 drop-shadow-md line-clamp-1 md:line-clamp-none">
-              {currentLang === "mr" ? item.mr_description : item.description}
-            </p>
-          )}
-        </div>
-      </div>
-
-      <div className="p-4 md:p-6 flex flex-col flex-1">
-        <div className="flex items-center justify-between mb-2 md:mb-3">
-          <div className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border ${getSpiceColor(item.spiceLevel)}`}>
-            {getSpiceIcon(item.spiceLevel)} {item.spiceLevel}
-          </div>
-        </div>
-
-        <div className="mb-2 md:mb-4 flex-1">
-          {/* Main description section moved to overlay for better visibility but keeping this space for layout balance if needed */}
-        </div>
-
-        <div className="flex items-center justify-between mb-4 md:mb-6 pt-3 md:pt-4 border-t border-gray-50">
-          <div className="flex flex-col">
-            <span className="text-xl md:text-2xl font-black text-gray-900 leading-none">
-              ₹{currentPrice}
-            </span>
-            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">
-              {t('price')} ({t(portion.toLowerCase())})
-            </span>
-          </div>
-
-          <div className="flex items-center bg-gray-50 rounded-2xl p-0.5 md:p-1 border border-gray-100 select-none">
-            <button
-              onClick={() => {
-                if (!sessionClosed) setQuantity(prev => Math.max(1, prev - 1));
-              }}
-              className="w-7 md:w-8 h-7 md:h-8 flex items-center justify-center text-gray-400 hover:text-primary transition-colors disabled:opacity-30"
-              disabled={sessionClosed || quantity <= 1}
-            >
-              <span className="text-xl md:text-2xl leading-none">−</span>
-            </button>
-            <span className="w-6 md:w-8 text-center text-xs md:text-sm font-black text-gray-900">{quantity}</span>
-            <button
-              onClick={() => {
-                if (!sessionClosed) setQuantity(prev => prev + 1);
-              }}
-              className="w-7 md:w-8 h-7 md:h-8 flex items-center justify-center text-gray-400 hover:text-primary transition-colors disabled:opacity-30"
-              disabled={sessionClosed}
-            >
-              <span className="text-xl md:text-2xl leading-none">+</span>
-            </button>
-          </div>
-        </div>
-
-        <button
-          onClick={() => {
-            if (!sessionClosed) {
-              addToCart(item, portion, currentPrice, quantity);
-              setQuantity(1);
-            }
-          }}
-          className="w-full py-3 md:py-4 bg-gray-900 hover:bg-primary text-white font-black rounded-2xl transition-all duration-300 shadow-xl shadow-gray-200 hover:shadow-primary/30 active:scale-95 disabled:opacity-50 flex items-center justify-center gap-3 uppercase tracking-tighter text-xs md:text-sm"
-          disabled={sessionClosed}
-        >
-          {t('add')}
-          <span className="bg-white/20 px-2 py-0.5 rounded-lg text-xs">₹{currentPrice * quantity}</span>
-        </button>
-      </div>
-    </div>
-  );
-}
 
 function ExpandedItemModalContent({
   item,
   currentLang,
   t,
   sessionClosed,
+  isMenuUnlocked,
+  billRequested,
   addToCart,
   onClose,
 }: {
@@ -279,6 +154,8 @@ function ExpandedItemModalContent({
   currentLang: "en" | "mr";
   t: (key: string) => string;
   sessionClosed: boolean;
+  isMenuUnlocked: boolean;
+  billRequested: boolean;
   addToCart: (item: MenuItem, portion: "Half" | "Full", price: number, quantity: number) => void;
   onClose: () => void;
 }) {
@@ -322,7 +199,7 @@ function ExpandedItemModalContent({
               value={portion}
               onChange={(e) => setPortion(e.target.value as "Half" | "Full")}
               className="w-full px-3 py-2 rounded-lg bg-white border border-gray-300 focus:outline-none focus:ring-2 focus:ring-orange-500 text-black font-semibold"
-              disabled={sessionClosed}
+              disabled={sessionClosed || billRequested}
             >
               <option value="Half">Half</option>
               <option value="Full">Full</option>
@@ -332,35 +209,23 @@ function ExpandedItemModalContent({
 
         <div>
           <label className="block text-sm font-semibold text-gray-800 mb-2">Quantity</label>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-6">
             <button
               onClick={() => {
-                if (!sessionClosed) setQuantity(prev => Math.max(1, prev - 1));
+                if (isMenuUnlocked && !sessionClosed && !billRequested) setQuantity(prev => Math.max(1, prev - 1));
               }}
-              className="w-10 h-10 flex items-center justify-center text-xl font-bold bg-gray-200 hover:bg-gray-300 rounded-lg"
-              disabled={sessionClosed}
+              className="w-12 h-12 flex items-center justify-center text-xl font-bold bg-gray-200 hover:bg-gray-300 rounded-lg disabled:opacity-30"
+              disabled={sessionClosed || !isMenuUnlocked || billRequested}
             >
               −
             </button>
-            <input
-              type="number"
-              min={1}
-              value={quantity}
-              onChange={(e) => {
-                if (!sessionClosed) {
-                  const val = e.target.value;
-                  setQuantity(val ? Math.max(1, Number(val)) : 1);
-                }
-              }}
-              className="w-12 h-10 text-center text-lg font-bold border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-black"
-              disabled={sessionClosed}
-            />
+            <span className="text-xl font-bold text-black min-w-[1.5rem] text-center">{quantity}</span>
             <button
               onClick={() => {
-                if (!sessionClosed) setQuantity(prev => prev + 1);
+                if (isMenuUnlocked && !sessionClosed && !billRequested) setQuantity(prev => prev + 1);
               }}
-              className="w-10 h-10 flex items-center justify-center text-xl font-bold bg-gray-200 hover:bg-gray-300 rounded-lg"
-              disabled={sessionClosed}
+              className="w-12 h-12 flex items-center justify-center text-xl font-bold bg-gray-200 hover:bg-gray-300 rounded-lg disabled:opacity-30"
+              disabled={sessionClosed || !isMenuUnlocked || billRequested}
             >
               +
             </button>
@@ -369,16 +234,16 @@ function ExpandedItemModalContent({
 
         <button
           onClick={() => {
-            if (!sessionClosed) {
+            if (isMenuUnlocked && !sessionClosed && !billRequested) {
               const currentPrice = portion === "Half" ? (item.price.half || item.price.full) : item.price.full;
               addToCart(item, portion, currentPrice, quantity);
               onClose();
             }
           }}
-          className="w-full px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-bold rounded-lg transition-all disabled:opacity-50"
-          disabled={sessionClosed}
+          className={`w-full px-6 py-4 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-bold rounded-xl transition-all disabled:opacity-50 ${(!isMenuUnlocked || billRequested) && !sessionClosed ? 'from-gray-400 to-gray-500' : ''}`}
+          disabled={sessionClosed || !isMenuUnlocked || billRequested}
         >
-          ✅ Add to Cart
+          {isMenuUnlocked ? `✅ ${t('addToCart')}` : (currentLang === "mr" ? "ऑर्डर करण्यासाठी वरील तपशील भरा" : "Enter details above to order")}
         </button>
       </div>
     </div>
@@ -403,22 +268,29 @@ function OrderingPageInner() {
   const [addedMessage, setAddedMessage] = useState<string | null>(null);
   const [expandedItem, setExpandedItem] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"starter" | "indian-bread" | "rice" | "dal" | "raita" | "noodles" | "ice-cream">("starter");
-  const [menuItems, setMenuItems] = useState<MenuItem[]>(fallbackMenuItems);
-  const [menuLoading, setMenuLoading] = useState(true);
+  const [showBillConfirm, setShowBillConfirm] = useState(false);
+  const [showExtraConfirm, setShowExtraConfirm] = useState(false);
+
+  // Derived State: Auto-Unlock Menu
+  const isMenuUnlocked = useMemo(() => {
+    return customerName.trim() !== "" && Number(numberOfPeople) > 0;
+  }, [customerName, numberOfPeople]);
 
   // Session state
   const [isSessionMode, setIsSessionMode] = useState(false);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [sessionLoading, setSessionLoading] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const [showExtraConfirm, setShowExtraConfirm] = useState(false);
-  const [showBillConfirm, setShowBillConfirm] = useState(false);
   const [sessionClosed, setSessionClosed] = useState(false);
   const [showCartModal, setShowCartModal] = useState(false);
   const [billStatus, setBillStatus] = useState<"pending" | "accepted" | "downloaded" | null>(null);
   const [billRequested, setBillRequested] = useState(false);
   const [currentOrder, setCurrentOrder] = useState<any>(null);
   const [currentLang, setCurrentLang] = useState<"en" | "mr">("en");
+  const [isStarted, setIsStarted] = useState(false);
+  const [showBanner, setShowBanner] = useState(true);
+  const [menuItems, setMenuItems] = useState<MenuItem[]>(fallbackMenuItems);
+  const [menuLoading, setMenuLoading] = useState(true);
 
   const t = (key: string) => translations[currentLang][key] || key;
 
@@ -518,6 +390,7 @@ function OrderingPageInner() {
           setCurrentSessionId(sessionDoc.id);
           setCurrentOrder(sessionData);
           setIsSessionMode(true);
+          setIsStarted(true); // Active session means started
 
           // Auto-recover names if currently empty (fresh scan scenario)
           if (!customerName) setCustomerName(sessionData.customerName);
@@ -849,34 +722,45 @@ function OrderingPageInner() {
         {/* Professional Header */}
         <div className="bg-white border-b border-gray-200 sticky top-0 z-40 transition-shadow duration-300 shadow-sm">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 h-20 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-primary rounded-2xl flex items-center justify-center text-2xl shadow-lg shadow-primary/20">
+            <div className="flex items-center gap-2 md:gap-3">
+              <div className="w-10 h-10 md:w-12 md:h-12 bg-primary rounded-2xl flex items-center justify-center text-xl md:text-2xl shadow-lg shadow-primary/20">
                 🍽️
               </div>
-              <div className="hidden sm:block">
-                <h1 className="text-xl font-extrabold text-gray-900 tracking-tight">Delicious Bites</h1>
-                <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider">Premium Dining</p>
+              <div className="hidden xs:block">
+                <h1 className="text-sm md:text-xl font-extrabold text-gray-900 tracking-tight leading-tight">Delicious Bites</h1>
+                <p className="text-[8px] md:text-xs text-gray-500 font-semibold uppercase tracking-wider">Premium Dining</p>
               </div>
             </div>
 
-            {/* Cart Button */}
-            <button
-              onClick={() => setShowCartModal(true)}
-              className="group flex items-center gap-4 bg-gray-50 hover:bg-white border border-gray-200 hover:border-primary/30 px-3 py-2 rounded-2xl transition-all duration-300 hover:shadow-xl hover:shadow-primary/5 active:scale-95"
-            >
-              <div className="flex flex-col items-end">
-                <span className="text-xs font-bold text-gray-400 uppercase tracking-tighter">Your Cart</span>
-                <span className="text-sm font-black text-gray-900 leading-none">₹{calculateTotal()}</span>
-              </div>
-              <div className="relative w-11 h-11 bg-white group-hover:bg-primary rounded-xl flex items-center justify-center text-xl transition-colors duration-300 border border-gray-100 group-hover:border-primary shadow-sm">
-                🛒
-                {cart.length > 0 && (
-                  <div className="absolute -top-2 -right-2 bg-primary text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-black shadow-lg animate-bounce">
-                    {cart.length}
-                  </div>
-                )}
-              </div>
-            </button>
+            <div className="flex items-center gap-2 md:gap-4">
+              {isSessionMode && !sessionClosed && !billRequested && (
+                <button
+                  onClick={() => setShowBillConfirm(true)}
+                  className="px-3 md:px-5 py-2 border-2 border-rose-500 text-rose-500 hover:bg-rose-50 font-black rounded-xl text-[10px] md:text-xs transition-all uppercase tracking-tighter"
+                >
+                  {t('requestBill')}
+                </button>
+              )}
+
+              {/* Cart Button (Backup for Desktop) */}
+              <button
+                onClick={() => setShowCartModal(true)}
+                className="hidden md:flex group items-center gap-4 bg-gray-50 hover:bg-white border border-gray-200 hover:border-primary/30 px-3 py-2 rounded-2xl transition-all duration-300 hover:shadow-xl hover:shadow-primary/5 active:scale-95"
+              >
+                <div className="flex flex-col items-end">
+                  <span className="text-xs font-bold text-gray-400 uppercase tracking-tighter">Your Cart</span>
+                  <span className="text-sm font-black text-gray-900 leading-none">₹{calculateTotal()}</span>
+                </div>
+                <div className="relative w-11 h-11 bg-white group-hover:bg-primary rounded-xl flex items-center justify-center text-xl transition-colors duration-300 border border-gray-100 group-hover:border-primary shadow-sm">
+                  🛒
+                  {cart.length > 0 && (
+                    <div className="absolute -top-2 -right-2 bg-primary text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-black shadow-lg animate-bounce">
+                      {cart.length}
+                    </div>
+                  )}
+                </div>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -955,16 +839,36 @@ function OrderingPageInner() {
                 </button>
               </div>
             )}
+
+            {billRequested && !sessionClosed && (
+              <div className="flex items-center gap-4 bg-amber-50 border border-amber-200 px-6 py-4 rounded-3xl shadow-sm animate-pulse">
+                <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-2xl shadow-sm border border-amber-300">
+                  🔒
+                </div>
+                <div>
+                  <h3 className="font-bold text-amber-900 text-lg">Ordering Locked</h3>
+                  <p className="text-amber-700/80 text-sm font-medium">Bill has been requested. No further changes can be made.</p>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Modern Personal Details Form */}
-          <div className="mb-12">
-            <div className="bg-white rounded-3xl p-8 border border-gray-200 shadow-xl shadow-gray-200/50">
-              <div className="flex items-center gap-3 mb-8">
-                <div className="w-1.5 h-8 bg-primary rounded-full" />
-                <h2 className="text-2xl font-black text-gray-900">{t('personalDetails')}</h2>
+          <div id="details-gate" className="mb-8">
+            <div className={`bg-white rounded-3xl p-6 md:p-8 border-2 transition-all duration-500 ${isStarted ? 'border-emerald-100 bg-emerald-50/10' : 'border-primary/20 shadow-xl shadow-primary/5'}`}>
+              <div className="flex items-center justify-between mb-6 md:mb-8">
+                <div className="flex items-center gap-3">
+                  <div className={`w-1.5 h-8 rounded-full ${isStarted ? 'bg-emerald-500' : 'bg-primary'}`} />
+                  <h2 className="text-xl md:text-2xl font-black text-gray-900">{t('personalDetails')}</h2>
+                </div>
+                {isStarted && !sessionClosed && (
+                  <span className="bg-emerald-500 text-white text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest animate-pulse">
+                    READY TO ORDER
+                  </span>
+                )}
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl">
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8 max-w-4xl">
                 <div className="relative group">
                   <input
                     type="text"
@@ -972,8 +876,8 @@ function OrderingPageInner() {
                     placeholder=" "
                     value={customerName}
                     onChange={(e) => setCustomerName(e.target.value)}
-                    className="peer w-full px-6 py-4 rounded-2xl bg-gray-50 border border-gray-200 focus:bg-white focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all outline-none text-gray-900 font-bold placeholder-transparent"
-                    disabled={sessionLoading || sessionClosed}
+                    className="peer w-full px-6 py-4 rounded-2xl bg-gray-50 border border-gray-200 focus:bg-white focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all outline-none text-gray-900 font-bold placeholder-transparent disabled:opacity-50"
+                    disabled={sessionLoading || sessionClosed || isStarted}
                   />
                   <label
                     htmlFor="customer-name"
@@ -990,8 +894,8 @@ function OrderingPageInner() {
                     min={1}
                     value={numberOfPeople}
                     onChange={(e) => setNumberOfPeople(e.target.value)}
-                    className="peer w-full px-6 py-4 rounded-2xl bg-gray-50 border border-gray-200 focus:bg-white focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all outline-none text-gray-900 font-bold placeholder-transparent"
-                    disabled={sessionLoading || sessionClosed}
+                    className="peer w-full px-6 py-4 rounded-2xl bg-gray-50 border border-gray-200 focus:bg-white focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all outline-none text-gray-900 font-bold placeholder-transparent disabled:opacity-50"
+                    disabled={sessionLoading || sessionClosed || isStarted}
                   />
                   <label
                     htmlFor="num-people"
@@ -1001,6 +905,7 @@ function OrderingPageInner() {
                   </label>
                 </div>
               </div>
+
               {sessionLoading && (
                 <p className="mt-6 text-sm font-bold text-primary flex items-center gap-2">
                   <span className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -1009,6 +914,22 @@ function OrderingPageInner() {
               )}
             </div>
           </div>
+
+          {/* Instructional Banner */}
+          {showBanner && !isSessionMode && (
+            <div className="mb-8 animate-in fade-in slide-in-from-top-4 duration-500">
+              <div className="bg-gray-900 text-white p-4 rounded-2xl flex items-center justify-between shadow-lg">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] md:text-sm font-bold uppercase tracking-tighter">
+                  <span className={!isMenuUnlocked ? "text-primary anim-pulse" : "text-emerald-400"}>{t('instructionStep1')}</span>
+                  <span className="text-gray-600">→</span>
+                  <span className={isMenuUnlocked && cart.length === 0 ? "text-primary" : "text-gray-400"}>{t('instructionStep2')}</span>
+                  <span className="text-gray-600">→</span>
+                  <span className={cart.length > 0 ? "text-primary" : "text-gray-400"}>{t('instructionStep3')}</span>
+                </div>
+                <button onClick={() => setShowBanner(false)} className="text-gray-500 hover:text-white ml-2">✕</button>
+              </div>
+            </div>
+          )}
 
           {/* APPETIZING MENU SECTION */}
           <div>
@@ -1019,9 +940,9 @@ function OrderingPageInner() {
               </div>
             </div>
 
-            {/* Scrollable Category Pills */}
-            <div className="relative mb-10 group">
-              <div className="flex overflow-x-auto pb-4 gap-3 no-scrollbar scroll-smooth">
+            {/* Multi-Row Category Container */}
+            <div className="mb-10">
+              <div className="flex flex-wrap justify-center gap-2 md:gap-3">
                 {[
                   { id: "starter" as const, key: "categoryStarters", emoji: "🥗" },
                   { id: "indian-bread" as const, key: "categoryBreads", emoji: "🥖" },
@@ -1037,14 +958,14 @@ function OrderingPageInner() {
                     <button
                       key={tab.id}
                       onClick={() => setActiveTab(tab.id)}
-                      className={`flex-shrink-0 flex items-center gap-3 px-4 md:px-6 py-2 md:py-4 rounded-3xl font-black text-xs md:text-sm uppercase tracking-tight transition-all duration-300 border-2 ${isActive
-                        ? "bg-primary border-primary text-white shadow-xl shadow-primary/20 scale-105"
-                        : "bg-white border-gray-100 text-gray-500 hover:border-gray-300 hover:bg-gray-50"
+                      className={`flex items-center gap-2 px-3 md:px-5 py-2 md:py-3 rounded-2xl font-black text-[10px] md:text-sm uppercase tracking-tight transition-all duration-300 border-2 ${isActive
+                        ? "bg-primary border-primary text-white shadow-lg shadow-primary/20 scale-105"
+                        : "bg-white border-gray-100 text-gray-500 hover:border-gray-300"
                         }`}
                     >
-                      <span className="text-lg">{tab.emoji}</span>
+                      <span className="text-base">{tab.emoji}</span>
                       <span className="whitespace-nowrap">{t(tab.key)}</span>
-                      <span className={`px-2 py-0.5 rounded-lg text-[10px] ${isActive ? "bg-white/20 text-white" : "bg-gray-100 text-gray-400"}`}>
+                      <span className={`px-2 py-0.5 rounded-lg text-[9px] ${isActive ? "bg-white/20 text-white" : "bg-gray-100 text-gray-400"}`}>
                         {count}
                       </span>
                     </button>
@@ -1070,6 +991,8 @@ function OrderingPageInner() {
                       currentLang={currentLang}
                       t={t}
                       sessionClosed={sessionClosed}
+                      isMenuUnlocked={isMenuUnlocked}
+                      billRequested={billRequested}
                       addToCart={addToCart}
                     />
                   ))}
@@ -1091,6 +1014,8 @@ function OrderingPageInner() {
                       currentLang={currentLang}
                       t={t}
                       sessionClosed={sessionClosed}
+                      isMenuUnlocked={isMenuUnlocked}
+                      billRequested={billRequested}
                       addToCart={addToCart}
                       onClose={() => setExpandedItem(null)}
                     />
@@ -1357,6 +1282,62 @@ function OrderingPageInner() {
           )}
         </div>
       </div>
-    </div>
+
+      {/* Floating Action Button (FAB) - For Cart Summary */}
+      <button
+        onClick={() => setShowCartModal(true)}
+        className={`fixed bottom-6 right-6 z-50 md:hidden flex items-center gap-3 bg-gray-900 text-white px-6 py-4 rounded-full shadow-2xl shadow-gray-900/40 transition-all active:scale-90 border border-white/10 ${cart.length === 0 ? 'opacity-0 translate-y-20 pointer-events-none' : 'opacity-100 translate-y-0'}`}
+      >
+        <div className="relative">
+          <span className="text-2xl">🛒</span>
+          <span className="absolute -top-2 -right-2 bg-primary text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center border-2 border-gray-900">
+            {cart.length}
+          </span>
+        </div>
+        <div className="flex flex-col items-start leading-none">
+          <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-0.5">View Cart</span>
+          <span className="text-sm font-black">₹{cart.reduce((sum, item) => sum + item.price * item.quantity, 0)}</span>
+        </div>
+      </button>
+
+      {/* Dynamic "Place Order" Floating Bar/Button - Auto-Hide when cart open or locked */}
+      <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-[90%] max-w-md transition-all duration-500 transform ${(cart.length > 0 && !showCartModal && !billRequested) ? 'translate-y-0 opacity-100' : 'translate-y-20 opacity-0 pointer-events-none'}`}>
+        <button
+          onClick={() => setShowCartModal(true)}
+          className="w-full bg-primary hover:bg-primary-hover text-white py-5 rounded-2xl shadow-2xl shadow-primary/40 flex items-center justify-between px-8 group overflow-hidden relative"
+        >
+          <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
+          <div className="flex flex-col items-start">
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white/60 mb-1">Items in Cart: {cart.length}</span>
+            <span className="text-xl font-black">₹{cart.reduce((sum, item) => sum + item.price * item.quantity, 0)}</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-black uppercase tracking-widest bg-white/20 px-4 py-2 rounded-xl">Place Order</span>
+            <span className="text-2xl">⚡</span>
+          </div>
+        </button>
+      </div>
+
+      {/* External Download Bill Button - Floating when locked & approved */}
+      {
+        billRequested && billStatus === "accepted" && (
+          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-[90%] max-w-md animate-in slide-in-from-bottom-5 duration-500">
+            <button
+              onClick={() => window.location.href = `/bill/${currentSessionId}`}
+              className="w-full bg-emerald-500 hover:bg-emerald-600 text-white py-5 rounded-2xl shadow-2xl shadow-emerald-500/40 flex items-center justify-between px-8 group relative overflow-hidden"
+            >
+              <div className="flex flex-col items-start text-left">
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white/60 mb-1">Bill is Ready</span>
+                <span className="text-lg font-black uppercase">Download Digital Bill</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-2xl">📥</span>
+              </div>
+            </button>
+          </div>
+        )
+      }
+    </div >
   );
 }
+

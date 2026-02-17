@@ -91,6 +91,8 @@ const mapDocToMenuItem = (docSnap: QueryDocumentSnapshot): MenuItem => {
     image: typeof rawData.image === 'object' ? rawData.image.stringValue : rawData.image || "/images/default.jpg",
     noPortion: rawData.noPortion === true || rawData.noPortion === 'true',
     category: typeof rawData.category === 'object' ? rawData.category.stringValue : rawData.category || "individual",
+    foodType: rawData.foodType,
+    spiceLevel: rawData.spiceLevel,
   };
 
   return {
@@ -104,6 +106,8 @@ const mapDocToMenuItem = (docSnap: QueryDocumentSnapshot): MenuItem => {
     noPortion: data.noPortion || false,
     category: (data.category as MenuItem["category"]) || "individual",
     description: rawData.description || "",
+    foodType: data.foodType,
+    spiceLevel: data.spiceLevel,
   };
 };
 
@@ -129,6 +133,8 @@ export default function ChefDashboard() {
     description: "",
     noPortion: false,
     category: "starter" as MenuItem["category"],
+    foodType: "Veg" as "Veg" | "Non-Veg",
+    spiceLevel: "Medium" as "Sweet" | "Medium" | "Spicy",
   });
 
   const [lang, setLang] = useState<"en" | "mr">("en");
@@ -355,6 +361,8 @@ export default function ChefDashboard() {
         description: newMenuItem.description.trim(),
         noPortion: newMenuItem.noPortion,
         category: newMenuItem.category,
+        foodType: newMenuItem.foodType,
+        spiceLevel: newMenuItem.spiceLevel,
       });
       setNewMenuItem({
         name: "",
@@ -364,6 +372,8 @@ export default function ChefDashboard() {
         description: "",
         noPortion: false,
         category: "starter",
+        foodType: "Veg",
+        spiceLevel: "Medium",
       });
       alert("Item added successfully! ✨");
     } catch (error) {
@@ -656,21 +666,56 @@ export default function ChefDashboard() {
                   />
                 </div>
 
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-4">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Category</label>
+                    <select
+                      value={newMenuItem.category}
+                      onChange={(e) => setNewMenuItem({ ...newMenuItem, category: e.target.value as any })}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all text-sm"
+                    >
+                      <option value="starter">Starters</option>
+                      <option value="indian-bread">Indian Bread</option>
+                      <option value="rice">Rice</option>
+                      <option value="dal">Dal</option>
+                      <option value="raita">Raita</option>
+                      <option value="noodles">Noodles</option>
+                      <option value="ice-cream">Ice Cream</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-4">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Spice Level</label>
+                    <select
+                      value={newMenuItem.spiceLevel}
+                      onChange={(e) => setNewMenuItem({ ...newMenuItem, spiceLevel: e.target.value as any })}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all text-sm"
+                    >
+                      <option value="Sweet">Sweet</option>
+                      <option value="Medium">Medium</option>
+                      <option value="Spicy">Spicy</option>
+                    </select>
+                  </div>
+                </div>
+
                 <div className="space-y-4">
-                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Category</label>
-                  <select
-                    value={newMenuItem.category}
-                    onChange={(e) => setNewMenuItem({ ...newMenuItem, category: e.target.value as any })}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all text-sm"
-                  >
-                    <option value="starter">Starters</option>
-                    <option value="indian-bread">Indian Bread</option>
-                    <option value="rice">Rice</option>
-                    <option value="dal">Dal</option>
-                    <option value="raita">Raita</option>
-                    <option value="noodles">Noodles</option>
-                    <option value="ice-cream">Ice Cream</option>
-                  </select>
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Food Type</label>
+                  <div className="flex gap-4">
+                    {["Veg", "Non-Veg"].map((type) => (
+                      <button
+                        key={type}
+                        onClick={() => setNewMenuItem({ ...newMenuItem, foodType: type as any })}
+                        className={`flex-1 py-3 rounded-xl border-2 font-bold transition-all ${newMenuItem.foodType === type
+                          ? type === "Veg"
+                            ? "border-emerald-500 bg-emerald-500/10 text-emerald-400 shadow-lg shadow-emerald-900/20"
+                            : "border-rose-500 bg-rose-500/10 text-rose-400 shadow-lg shadow-rose-900/20"
+                          : "border-slate-700 bg-slate-900 text-slate-500 hover:border-slate-500"
+                          }`}
+                      >
+                        {type === "Veg" ? "🟢 " : "🔴 "}{type}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 <button
